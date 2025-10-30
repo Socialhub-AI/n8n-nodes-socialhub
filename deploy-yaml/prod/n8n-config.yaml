@@ -1,0 +1,43 @@
+# ---
+# Shared configuration for all n8n pods
+# ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: n8n-config
+  namespace: ns-n8n
+data:
+  # Queue mode
+  EXECUTIONS_MODE: "queue"
+  N8N_LISTEN_ADDRESS: "0.0.0.0"
+  N8N_PROXY_HOPS: "1"
+  N8N_SECURE_COOKIE: "false"
+  # Database (PostgreSQL)
+  DB_TYPE: "postgresdb"
+  DB_POSTGRESDB_HOST: "172.18.1.50"
+  DB_POSTGRESDB_PORT: "5432"
+  DB_POSTGRESDB_DATABASE: "n8n"
+  DB_POSTGRESDB_SCHEMA: "public"
+  # Redis (BullMQ)
+  QUEUE_BULL_REDIS_HOST: "172.18.1.40"
+  QUEUE_BULL_REDIS_PORT: "6379"
+  QUEUE_BULL_REDIS_DB: "14"
+  QUEUE_BULL_REDIS_TIMEOUT_THRESHOLD: "10000"
+  # Optional: enable Prometheus /metrics & queue metrics on main
+  N8N_METRICS: "true"
+  N8N_METRICS_INCLUDE_QUEUE_METRICS: "true"
+  # n8n-main route
+  # n8n-main route
+  #N8N_PROTOCOL: "http"
+  #N8N_HOST: "192.168.1.16:32678"
+  #N8N_PATH: "/n8n/"
+  #N8N_EDITOR_BASE_URL: "http://27.106.111.43:5678/"
+  N8N_EDITOR_BASE_URL: "https://n8n.socialhub.ai/"
+  # Endpoints & payloads
+  N8N_ENDPOINT_WEBHOOK: "webhook"
+  N8N_ENDPOINT_WEBHOOK_TEST: "webhook-test"
+  # Increase if you expect big webhook payloads (MiB)
+  N8N_PAYLOAD_SIZE_MAX: "32"
+  # Set your public HTTPS URL (used to register external webhooks)
+  #WEBHOOK_URL: "http://27.106.111.43:15678"
+  WEBHOOK_URL: "https://n8n.socialhub.ai"

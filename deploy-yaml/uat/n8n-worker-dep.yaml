@@ -1,0 +1,45 @@
+# ---
+# n8n WORKERS (do the actual executions). Scale replicas and/or --concurrency.
+# ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: n8n-worker
+  namespace: ns-n8n
+spec:
+  type: ClusterIP
+  selector:
+    app: n8n-worker
+  ports:
+    - name: http
+      port: 5678
+      targetPort: 5678
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: n8n-worker
+  namespace: ns-n8n
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: n8n-worker
+  template:
+    metadata:
+      labels:
+        app: n8n-worker
+    spec:
+      containers:
+        - name: n8n
+          image: registry.easesaas.com/myron/n8nio-n8n:1.109.2
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            runAsUser: 0
+          command: ["n8n","worker","--concurrency=10"]
+          envFrom:
+            - configMapRef: { name: n8n-config }
+            - secretRef: { name: n8n-secrets }
+          resources:
+            requests: { cpu: "300m", memory: "512Mi" }
+            limits:   { cpu: "1500m", memory: "2Gi" }

@@ -1,0 +1,268 @@
+{
+  "name": "SocialHub Points Adjustment",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 0 * * *"
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Daily Schedule",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "resource": "member",
+        "operation": "getMemberList",
+        "consumerCode": "{{ $json.consumerCode }}",
+        "pageNo": 1,
+        "pageSize": 100,
+        "loyaltyCode": "MAIN_LOYALTY"
+      },
+      "id": "get-member-list",
+      "name": "Get Member List",
+      "type": "n8n-nodes-socialhub.socialHub",
+      "typeVersion": 1,
+      "position": [460, 300],
+      "credentials": {
+        "socialHubApi": {
+          "id": "your-credential-id",
+          "name": "SocialHub API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "order",
+        "operation": "getTransactionList",
+        "consumerCode": "{{ $json.consumerCode }}",
+        "pageNo": 1,
+        "pageSize": 50,
+        "beginDate": "{{ $now.minus({days: 1}).toFormat('yyyy-MM-dd') }}",
+        "endDate": "{{ $now.toFormat('yyyy-MM-dd') }}"
+      },
+      "id": "get-transactions",
+      "name": "Get Yesterday's Transactions",
+      "type": "n8n-nodes-socialhub.socialHub",
+      "typeVersion": 1,
+      "position": [680, 300],
+      "credentials": {
+        "socialHubApi": {
+          "id": "your-credential-id",
+          "name": "SocialHub API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Calculate bonus points based on transaction amount\nconst transactions = $input.all();\nlet totalAmount = 0;\nlet bonusPoints = 0;\n\nfor (const transaction of transactions) {\n  if (transaction.json.data && transaction.json.data.list) {\n    for (const order of transaction.json.data.list) {\n      totalAmount += order.totalAmount || 0;\n    }\n  }\n}\n\n// Bonus calculation: 1 point per 10 yuan spent\nbonusPoints = Math.floor(totalAmount / 10);\n\n// Additional bonus for high-value customers\nif (totalAmount > 1000) {\n  bonusPoints += 100; // Extra 100 points for spending over 1000 yuan\n}\n\nreturn {\n  json: {\n    totalAmount,\n    bonusPoints,\n    memberData: $('Get Member List').item.json.data.list[0]\n  }\n};"
+      },
+      "id": "calculate-bonus-points",
+      "name": "Calculate Bonus Points",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-bonus-points",
+              "leftValue": "{{ $json.bonusPoints }}",
+              "rightValue": "0",
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "check-bonus-eligibility",
+      "name": "Check Bonus Eligibility",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "resource": "points",
+        "operation": "adjustPoints",
+        "accountType": 1,
+        "accountCode": "{{ $json.memberData.cardNo }}",
+        "pointsGroupCode": "MAIN_POINTS",
+        "operationId": "DAILY_BONUS_{{ $now.toFormat('yyyyMMdd') }}",
+        "operationType": 1,
+        "pointValue": "{{ $json.bonusPoints }}",
+        "pointDesc": "Daily bonus points for transactions on {{ $now.minus({days: 1}).toFormat('yyyy-MM-dd') }}",
+        "effectiveEndTime": "{{ $now.plus({years: 1}).toISO() }}",
+        "upgradeTierFlag": 1
+      },
+      "id": "adjust-points",
+      "name": "Adjust Points",
+      "type": "n8n-nodes-socialhub.socialHub",
+      "typeVersion": 1,
+      "position": [1340, 200],
+      "credentials": {
+        "socialHubApi": {
+          "id": "your-credential-id",
+          "name": "SocialHub API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "subject": "Bonus Points Awarded!",
+        "emailType": "text",
+        "message": "Dear {{ $('Calculate Bonus Points').item.json.memberData.memberName }},\n\nCongratulations! You've earned {{ $('Calculate Bonus Points').item.json.bonusPoints }} bonus points for your recent purchases.\n\nTransaction amount: ¥{{ $('Calculate Bonus Points').item.json.totalAmount }}\nBonus points: {{ $('Calculate Bonus Points').item.json.bonusPoints }}\n\nThank you for your loyalty!\n\nBest regards,\nYour Loyalty Team"
+      },
+      "id": "send-notification",
+      "name": "Send Points Notification",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [1560, 200],
+      "credentials": {
+        "smtp": {
+          "id": "your-smtp-credential-id",
+          "name": "SMTP Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "message": "No bonus points to award for member: {{ $json.memberData.memberName }}"
+      },
+      "id": "log-no-bonus",
+      "name": "Log No Bonus",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1340, 400]
+    }
+  ],
+  "connections": {
+    "Daily Schedule": {
+      "main": [
+        [
+          {
+            "node": "Get Member List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Member List": {
+      "main": [
+        [
+          {
+            "node": "Get Yesterday's Transactions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Yesterday's Transactions": {
+      "main": [
+        [
+          {
+            "node": "Calculate Bonus Points",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Bonus Points": {
+      "main": [
+        [
+          {
+            "node": "Check Bonus Eligibility",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Bonus Eligibility": {
+      "main": [
+        [
+          {
+            "node": "Adjust Points",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log No Bonus",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Adjust Points": {
+      "main": [
+        [
+          {
+            "node": "Send Points Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {
+    "Daily Schedule": [
+      {
+        "json": {
+          "consumerCode": "CONSUMER_001"
+        }
+      }
+    ]
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z",
+      "id": "socialhub",
+      "name": "SocialHub"
+    },
+    {
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z",
+      "id": "points-management",
+      "name": "Points Management"
+    },
+    {
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z",
+      "id": "automation",
+      "name": "Automation"
+    }
+  ],
+  "triggerCount": 0,
+  "updatedAt": "2024-01-01T00:00:00.000Z",
+  "versionId": "1"
+}
