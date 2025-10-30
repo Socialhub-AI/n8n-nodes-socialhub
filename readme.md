@@ -18,5 +18,4 @@ git push -u origin main
 git remote add origin https://github.com/Socialhub-AI/n8n-nodes-socialhub.git
 git branch -M main
 git push -u origin main
-
 ```
